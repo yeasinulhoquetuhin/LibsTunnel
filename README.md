@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="android/app/src/main/res/drawable-nodpi/libs_logo.png" width="104" alt="Libs Tunnel logo">
+  <img src=https://raw.githubusercontent.com/yeasinulhoquetuhin/LibsTunnel/refs/heads/master/Libs-Tunnel-banner-16x9.png
 </p>
 
 <h1 align="center">Libs Tunnel</h1>
