@@ -1,0 +1,90 @@
+name: Bug report
+
+description: Something in the app or the engine does not work as expected
+
+labels: [bug]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove all real identifiers before submitting. Never paste a
+        live share link, a UUID, a password or a private key into a public
+        issue.
+
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: The version shown in the app, or the release tag you installed.
+      placeholder: v1.0.0
+    validations:
+      required: true
+
+  - type: input
+    id: android
+    attributes:
+      label: Android version and device
+      description: Android version, manufacturer and model.
+      placeholder: Android 14, Pixel 7a
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it happen
+      options:
+        - Connection or tunnel
+        - Profile management
+        - Share link import
+        - Encrypted export or import
+        - Settings or appearance
+        - Build from source
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Numbered steps, starting from opening the app.
+      placeholder: |
+        1. Open the app
+        2. Select a profile
+        3. Tap connect
+    validations:
+      required: true
+
+  - type: textarea
+    id: profile
+    attributes:
+      label: Relevant profile settings
+      description: Protocol, transport, security and flow, with all identifiers removed.
+      render: text
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log output
+      description: Copy from the in-app log screen, with identifiers removed.
+      render: shell
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I removed all server addresses, UUIDs, passwords and private keys from this report.
+          required: true
+        - label: I searched the existing issues and this is not a duplicate.
+          required: true

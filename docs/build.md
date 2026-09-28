@@ -3,11 +3,12 @@
 ## Requirements
 
 - Linux or macOS
-- JDK 17
+- JDK 17 or newer, verified on 21
 - Go 1.26.3
 - Android SDK platform 36 and build-tools
 - Android NDK installed through SDK Manager
-- Gradle 8.x, or add a normal Gradle wrapper to `android/`
+- No separate Gradle install needed: the wrapper in `android/gradlew`
+  pins Gradle 8.11.1
 
 Use the pinned Go version for reproducible gomobile output.
 

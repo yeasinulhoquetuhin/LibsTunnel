@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/yeasinulhoquetuhin/LibsTunnel/blob/master/SECURITY.md
+    about: Report vulnerabilities privately. Do not open a public issue.
+  - name: Telegram support
+    url: https://t.me/TDZ_CHAT
+    about: Setup help and general questions.
+  - name: Developer website
+    url: https://tuhinbro.com
+    about: Releases, notes and other projects.

@@ -1,0 +1,62 @@
+name: Feature request
+
+description: Suggest a new capability for Libs Tunnel
+
+labels: [enhancement]
+
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you unable to do today? Describe the situation rather than the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What you would like to happen, and how the user interface should behave.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Which layer is affected
+      options:
+        - Android client
+        - Profile format or share links
+        - Go engine
+        - Payload injector
+        - Build or packaging
+        - Documentation
+    validations:
+      required: true
+
+  - type: dropdown
+    id: compatibility
+    attributes:
+      label: Does it need a server-side change
+      options:
+        - No, client-side only
+        - Yes, the server must also change
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: This is not already implemented on the master branch.
+          required: true
+        - label: This request does not require copying code or assets from another application.
+          required: true
