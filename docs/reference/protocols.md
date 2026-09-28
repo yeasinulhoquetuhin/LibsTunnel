@@ -40,14 +40,25 @@ Stream settings such as packet encoding, TCP header type, mKCP seed, WebSocket
 headers and gRPC authority are stored per profile, so each saved profile fully
 describes its own connection.
 
-## Payload injection
+## Payload injection in Xray
 
-The injector sits between the Xray outbound and the remote endpoint. The
-original destination address and port are captured before Xray starts, and Xray
-is pointed at a loopback port owned by the injector instead. For each transport
-connection the injector opens and protects a socket, optionally negotiates an
-outer TLS session for SNI injection, writes the configured payload, optionally
-validates HTTP-like response headers, and then bridges the byte stream to Xray.
+Payload injection is built into the Xray connection itself, so a payload can be
+written directly into the Xray transport without an external proxy. The injector
+sits between the Xray outbound and the remote endpoint. The original destination
+address and port are captured before Xray starts, and Xray is pointed at a
+loopback port owned by the injector instead. For each transport connection the
+injector opens and protects a socket, optionally negotiates an outer TLS session
+for SNI injection, writes the configured payload, optionally validates HTTP-like
+response headers, and then bridges the byte stream to Xray.
+
+### Modes
+
+| Mode | Engine value | Behaviour |
+| --- | --- | --- |
+| Direct | `direct` | Writes the payload straight to the remote endpoint. |
+| Direct with SNI | `direct-sni` | Adds an outer TLS session using the configured SNI before the payload. |
+| Proxy | `proxy` | Writes the payload through a local proxy at the configured host and port. |
+| Proxy with SNI | `proxy-sni` | Adds an outer TLS session and writes the payload through the local proxy. |
 
 Because injection happens below the protocol layer, it is independent of the
 protocol in use. The expected byte sequence for a WebSocket transport with an

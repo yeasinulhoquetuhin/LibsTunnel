@@ -55,8 +55,11 @@ single script, and there is no account, no telemetry and no advertising.
 - VLESS, VMess and Trojan profiles.
 - TCP, WebSocket, gRPC, HTTP Upgrade, SplitHTTP/XHTTP and mKCP transports.
 - TLS and REALITY security layers, with configurable SNI and fingerprint.
-- A local payload injector that can add an outer TLS layer, write a payload, and
-  validate the response before the stream is handed to the protocol handler.
+- A payload injector that runs as part of the Xray connection, so a payload can
+  be injected directly into the Xray transport without an external proxy. Four
+  modes are available: Direct, Direct with SNI, Proxy, and Proxy with SNI. The
+  injector can also add an outer TLS layer and validate the response before the
+  stream reaches the protocol handler.
 - Per-application routing, so selected apps use the tunnel and the rest do not.
 - Custom DNS settings, resolved before the VPN route is installed.
 - Configurable MTU, with a safe default of 1500.
@@ -106,9 +109,8 @@ Release artifacts are published on the
 | --- | --- | --- | --- |
 | 1.0.0 | `arm64-v8a` | 7.0 and later | [`Libs Tunnel v1.0.0`](https://github.com/yeasinulhoquetuhin/LibsTunnel/releases/tag/v1.0.0) |
 
-A mirror with live download counters is available at
-<https://sgx.tdz-server.store/drive/>. Every release publishes a SHA-256
-checksum next to the file. Verify it before installing.
+Every release publishes a SHA-256 checksum next to the file. Verify it before
+installing.
 
 > The published artifact is assembled with the debug signing configuration,
 > because no release keystore is included in this repository. The source is
@@ -193,8 +195,11 @@ Xray at a loopback port it owns, so the payload can be inserted below the
 protocol layer without knowing which protocol is in use. Every remote socket is
 passed through `VpnService.protect` to avoid a routing loop.
 
-A longer explanation, including the payload layers, is in
-[docs/architecture.md](docs/architecture.md).
+The payload injector is part of this chain, not a separate external tool: the
+payload is written into the Xray transport itself, in Direct, Direct with SNI,
+Proxy or Proxy with SNI mode. A longer explanation is in
+[docs/architecture.md](docs/architecture.md) and
+[docs/reference/protocols.md](docs/reference/protocols.md).
 
 ## Documentation
 
