@@ -1,0 +1,14 @@
+VPN Source Lite is free software licensed under the GNU General Public License,
+version 3 only (GPL-3.0-only).
+
+You may redistribute and/or modify it under GPL version 3. The software is
+provided without any warranty, including implied warranties of merchantability
+or fitness for a particular purpose.
+
+The complete license text is available at:
+https://www.gnu.org/licenses/gpl-3.0.txt
+
+SPDX-License-Identifier: GPL-3.0-only
+
+Third-party components retain their own copyrights and licenses. See
+third_party/NOTICE.md.

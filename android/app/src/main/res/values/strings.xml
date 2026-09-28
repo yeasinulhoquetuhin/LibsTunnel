@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">Libs Tunnel</string>
+    <string name="vpn_channel_name">Libs Tunnel connection</string>
+    <string name="vpn_connecting">Securing your connection</string>
+    <string name="vpn_connected">Private tunnel active</string>
+    <string name="developer_name">Yeasinul Hoque Tuhin</string>
+    <string name="developer_website">tuhinbro.com</string>
+</resources>

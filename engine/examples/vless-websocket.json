@@ -1,0 +1,55 @@
+{
+  "outboundTag": "proxy",
+  "tun": {
+    "socksAddress": "127.0.0.1:10808",
+    "mtu": 1500
+  },
+  "injection": {
+    "enabled": true,
+    "mode": "direct",
+    "payload": "CONNECT [host_port] HTTP/1.1[crlf]Host: front.example.org[crlf]User-Agent: [ua][crlf]Connection: Upgrade[crlf]Upgrade: websocket[crlf][crlf]",
+    "responseMode": "headers",
+    "acceptedStatus": [101, 200]
+  },
+  "xray": {
+    "log": {"loglevel": "warning"},
+    "inbounds": [
+      {
+        "tag": "socks-in",
+        "listen": "127.0.0.1",
+        "port": 10808,
+        "protocol": "socks",
+        "settings": {"auth": "noauth", "udp": true}
+      }
+    ],
+    "outbounds": [
+      {
+        "tag": "proxy",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "server.example.com",
+              "port": 443,
+              "users": [
+                {"id": "replace-with-your-id", "encryption": "none"}
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "ws",
+          "security": "tls",
+          "tlsSettings": {
+            "serverName": "server.example.com",
+            "allowInsecure": false
+          },
+          "wsSettings": {
+            "path": "/your-websocket-path",
+            "headers": {"Host": "server.example.com"}
+          }
+        }
+      }
+    ]
+  }
+}

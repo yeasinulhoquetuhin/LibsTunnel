@@ -1,0 +1,50 @@
+{
+  "outboundTag": "proxy",
+  "tun": {
+    "socksAddress": "127.0.0.1:10808",
+    "mtu": 1500
+  },
+  "injection": {
+    "enabled": true,
+    "mode": "direct",
+    "payload": "[method] [host_port] [protocol][crlf]Host: [host][crlf]User-Agent: [ua][crlf]Connection: keep-alive[crlf][crlf]",
+    "method": "CONNECT",
+    "protocol": "HTTP/1.1",
+    "userAgent": "vpnsource-lite/1.0",
+    "responseMode": "headers",
+    "acceptedStatus": [101, 200]
+  },
+  "xray": {
+    "log": {"loglevel": "warning"},
+    "inbounds": [
+      {
+        "tag": "socks-in",
+        "listen": "127.0.0.1",
+        "port": 10808,
+        "protocol": "socks",
+        "settings": {"auth": "noauth", "udp": true}
+      }
+    ],
+    "outbounds": [
+      {
+        "tag": "proxy",
+        "protocol": "vless",
+        "settings": {
+          "vnext": [
+            {
+              "address": "server.example.com",
+              "port": 443,
+              "users": [
+                {"id": "replace-with-your-id", "encryption": "none"}
+              ]
+            }
+          ]
+        },
+        "streamSettings": {
+          "network": "tcp",
+          "security": "none"
+        }
+      }
+    ]
+  }
+}

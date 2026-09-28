@@ -1,0 +1,3 @@
+-keep class com.libsvpn.tunnel.bindings.** { *; }
+-keep class go.** { *; }
+-dontwarn go.**
