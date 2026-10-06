@@ -1,256 +1,351 @@
 <p align="center">
-  <img src=https://raw.githubusercontent.com/yeasinulhoquetuhin/LibsTunnel/refs/heads/master/Libs-Tunnel-banner-16x9.png
+  <img src="Libs-Tunnel-banner-16x9.png" alt="Libs Tunnel project banner" width="100%">
 </p>
 
 <h1 align="center">Libs Tunnel</h1>
 
 <p align="center">
-  A local-first Android VPN client for VLESS, VMess and Trojan, built on the
-  Xray-core engine with a Compose user interface and a headless VPN service.
+  A local-first Android VPN client for VLESS, VMess and Trojan.<br>
+  Built with Xray-core, tun2socks, gVisor and Jetpack Compose.
 </p>
 
 <p align="center">
-  <a href="LICENSE"><img alt="License GPL-3.0-only" src="https://img.shields.io/badge/license-GPL--3.0--only-047857?style=flat-square&labelColor=edf7f2"></a>
-  <a href="https://github.com/yeasinulhoquetuhin/LibsTunnel/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/yeasinulhoquetuhin/LibsTunnel?display_name=tag&style=flat-square&color=34d399&labelColor=0a1712"></a>
-  <a href="https://github.com/yeasinulhoquetuhin/LibsTunnel/actions/workflows/ci.yml"><img alt="Continuous integration" src="https://github.com/yeasinulhoquetuhin/LibsTunnel/actions/workflows/ci.yml/badge.svg"></a>
-  <img alt="Android 7.0 and later" src="https://img.shields.io/badge/android-7.0%2B-047857?style=flat-square&labelColor=edf7f2">
-  <img alt="Architecture arm64-v8a" src="https://img.shields.io/badge/arch-arm64--v8a-047857?style=flat-square&labelColor=edf7f2">
+  <a href="https://github.com/yeasinulhoquetuhin/LibsTunnel/releases/tag/v1.0.1"><img alt="Release 1.0.1" src="https://img.shields.io/badge/release-1.0.1-047857?style=flat-square"></a>
+  <img alt="Android 7.0 and later" src="https://img.shields.io/badge/android-7.0%2B-047857?style=flat-square">
+  <img alt="Architecture arm64-v8a" src="https://img.shields.io/badge/arch-arm64--v8a-047857?style=flat-square">
+  <a href="LICENSE"><img alt="License GPL-3.0-only" src="https://img.shields.io/badge/license-GPL--3.0--only-047857?style=flat-square"></a>
+  <a href="https://github.com/yeasinulhoquetuhin/LibsTunnel/actions/workflows/ci.yml"><img alt="CI status" src="https://github.com/yeasinulhoquetuhin/LibsTunnel/actions/workflows/ci.yml/badge.svg"></a>
 </p>
 
 <p align="center">
-  <a href="#download">Download</a>
-  &nbsp;&middot;&nbsp;
-  <a href="#features">Features</a>
-  &nbsp;&middot;&nbsp;
-  <a href="#supported-protocols-and-transports">Protocols</a>
-  &nbsp;&middot;&nbsp;
-  <a href="#build-from-source">Build</a>
-  &nbsp;&middot;&nbsp;
+  <a href="#download">Download</a> &nbsp;&middot;&nbsp;
+  <a href="#get-started">Get started</a> &nbsp;&middot;&nbsp;
+  <a href="#features">Features</a> &nbsp;&middot;&nbsp;
+  <a href="#payload-injection">Payload injection</a> &nbsp;&middot;&nbsp;
+  <a href="#build-from-source">Build</a> &nbsp;&middot;&nbsp;
   <a href="#documentation">Documentation</a>
-  &nbsp;&middot;&nbsp;
-  <a href="#license">License</a>
 </p>
 
 ---
 
-Libs Tunnel is a clean-room Android VPN application. It was written from
-protocol specifications and public documentation. It contains no code, assets,
-keys, branding or configuration from any other application.
+Libs Tunnel lets you create and import connection profiles, route selected
+applications through a VPN, and inspect connection events on your device. The
+Android client handles the interface, profile storage and VPN permissions; a
+Go engine runs the tunnel.
 
-The project is split in two: a Go engine that owns the entire network path, and
-a Jetpack Compose client that owns consent, storage and the interface. The
-client never parses traffic, and the engine never draws anything.
-
-## Why it exists
-
-Most VPN clients for these protocols are closed source, ship with advertising or
-analytics, and hide how the tunnel is actually built. Libs Tunnel does the
-opposite. The full network path is readable, the build is reproducible from a
-single script, and there is no account, no telemetry and no advertising.
-
-## Features
-
-**Tunneling**
-
-- VLESS, VMess and Trojan profiles.
-- TCP, WebSocket, gRPC, HTTP Upgrade, SplitHTTP/XHTTP and mKCP transports.
-- TLS and REALITY security layers, with configurable SNI and fingerprint.
-- A payload injector that runs as part of the Xray connection, so a payload can
-  be injected directly into the Xray transport without an external proxy. Two
-  modes are available: Direct and Proxy. The injector can also add an outer TLS
-  layer and validate the response before the stream reaches the protocol
-  handler.
-- Per-application routing, so selected apps use the tunnel and the rest do not.
-- Custom DNS settings, resolved before the VPN route is installed.
-- Configurable MTU, with a safe default of 1500.
-
-**Profiles**
-
-- Import from `vless://`, `vmess://` and `trojan://` share links.
-- `.libs` profile export and import for moving profiles between devices.
-- A structured editor for every transport, security and flow field.
-- Duplicate, rename and delete.
-
-**Interface**
-
-- Jetpack Compose throughout, with light, dark and system themes and seven
-  accent colours.
-- A single screen that shows connection state, throughput, duration and the
-  active profile.
-- An in-app log view with search, severity filters, auto-scroll, copy, share
-  and a confirmation before clearing.
-- A battery-friendly foreground service with a persistent notification and a
-  Reconnect action.
-
-**Privacy**
-
-- No account, no analytics, no advertising, no crash reporting.
-- Credentials stay in application-private storage.
-- Nothing is written to a remote service. The only outbound connections are the
-  ones a profile explicitly describes.
-
-## Supported protocols and transports
-
-| Category | Supported values |
-| --- | --- |
-| Protocol | VLESS, VMess, Trojan |
-| Transport | TCP, WebSocket, gRPC, HTTP Upgrade, SplitHTTP/XHTTP, mKCP |
-| Security | TLS, REALITY, none |
-| Flow | XTLS |
-
-The full matrix, including the meaning of each stream setting, is documented in
-[docs/CONFIG.md](docs/CONFIG.md).
+This README describes **the v1.0.1 Android app**. You supply your own server or
+connection profile; this repository does not provide a VPN server or account.
+The banner is project artwork, and its phone illustration is a mockup.
 
 ## Download
 
-Release artifacts are published on the
-[releases page](https://github.com/yeasinulhoquetuhin/LibsTunnel/releases).
+**[Download Libs Tunnel v1.0.1 for ARM64](https://github.com/yeasinulhoquetuhin/LibsTunnel/releases/download/v1.0.1/Libs-Tunnel-v1.0.1-arm64.apk)**
 
-| Version | Architecture | Android | File |
-| --- | --- | --- | --- |
-| 1.0.1 | `arm64-v8a` | 7.0 and later | [`Libs Tunnel v1.0.1`](https://github.com/yeasinulhoquetuhin/LibsTunnel/releases/tag/v1.0.1) |
+| Detail | Published v1.0.1 APK |
+| --- | --- |
+| Filename | `Libs-Tunnel-v1.0.1-arm64.apk` |
+| Version / version code | `1.0.1` / `1001` |
+| Package | `com.libsvpn.tunnel` |
+| Architecture | `arm64-v8a` |
+| Minimum Android | Android 7.0, API 24 |
+| Target / compile SDK | API 36 |
+| Download size | 53,155,062 bytes, approximately 50.7 MiB |
+| Signing | Android debug certificate |
 
-Every release publishes a SHA-256 checksum next to the file. Verify it before
-installing.
+Release notes and the source archive are on the
+[v1.0.1 release page](https://github.com/yeasinulhoquetuhin/LibsTunnel/releases/tag/v1.0.1).
 
-> The published artifact is assembled with the debug signing configuration,
-> because no release keystore is included in this repository. The source is
-> complete, so anyone can build their own signed variant with
-> `scripts/build-android.sh` and their own keystore.
+### Verify the APK
+
+```text
+1bdf727ceaa9b8607089c10a241a6662727b36c1435ed3761339a199e94e9e12  Libs-Tunnel-v1.0.1-arm64.apk
+```
+
+```bash
+sha256sum Libs-Tunnel-v1.0.1-arm64.apk
+adb install Libs-Tunnel-v1.0.1-arm64.apk
+```
+
+The published v1.0.0 and v1.0.1 APKs use different signing certificates.
+Export any profiles you want to keep before uninstalling v1.0.0, then install
+v1.0.1. Uninstalling removes the app's local data.
+
+## Get started
+
+1. Open **Profiles** and choose **New profile** or **Import profile**.
+2. For a new profile, enter the server, port, credentials, transport and security
+   settings supplied by your server administrator. The new-profile port field
+   starts blank.
+3. To import a file, choose **Open .libs file**, select it, check the filename
+   shown in the import card, then tap **Import**. You can also paste a supported
+   share link into the same dialog.
+4. Select the profile, return to **Home**, tap **START** and grant Android's VPN
+   permission when requested.
+5. Use **STOP** on Home or in the notification to disconnect. The notification
+   also provides a manual **Reconnect** action.
+
+## Features
+
+### Connections and routing
+
+- VLESS, VMess and Trojan profiles through Xray-core.
+- TCP, WebSocket, gRPC, HTTP Upgrade, XHTTP and mKCP transport choices.
+- TLS and REALITY configuration, including server name and fingerprint fields.
+- Optional payload injection with **Direct** and **Proxy** connection modes.
+- Per-app routing: **All apps**, **Only selected**, or **Exclude selected**.
+  The app picker lists installed applications with launcher activities.
+- The generated Xray routing rules send private/local IP ranges through the
+  direct outbound.
+- Custom primary and secondary DNS server settings.
+- Configurable TUN MTU: default `1500`, validated range `1280` to `9000`.
+
+### Profiles and import/export
+
+- Create, edit, duplicate and delete saved profiles; rename through the editor.
+- Import `vless://`, `vmess://` and `trojan://` links, including multiline pastes
+  and Base64-encoded lists of supported links.
+- Import unencrypted `.libs` files through Android's document picker.
+- Export an individual profile from its **three-dot menu** as a `.libs` file,
+  or copy the exported JSON to the clipboard.
+- Lock/unlock controls in the profile menu. This is an app-level editing and
+  deletion restriction, not encryption or password protection.
+- Confirmation before deletion, with a guard for the running profile.
+
+**Config format:** `.libs` exports are readable JSON and include the profile's
+connection settings and credentials. Exporting does not encrypt them. The file
+codec is implemented in
+[LibsConfigCodec.kt](android/app/src/main/java/com/libsvpn/tunnel/data/LibsConfigCodec.kt).
+
+### Interface and connection controls
+
+- Home shows the connection state, selected profile, uploaded/downloaded byte
+  totals and connection duration. These counters are totals, not a speed meter.
+- Separate **Home**, **Profiles**, **Logs** and **Settings** sections.
+- Back from a section returns to Home; back from the editor closes the editor.
+- Left-aligned app title and an About shortcut in the top bar.
+- Light, dark and system themes; seven accents: Green, Blue, Purple, Orange,
+  Red, Teal and Pink. Android 12+ dynamic color is optional.
+- Action-specific haptic feedback with an on/off setting. Actual vibration
+  depends on the device and Android's haptic settings.
+- Foreground VPN notification with **Stop** and **Reconnect** actions.
+- Optional partial wake lock while connected, exposed as **Keep tunnel awake**.
+
+### Logs
+
+- Search, **All / Errors / Warnings** filters and colored event text.
+- Automatic scrolling as new entries arrive.
+- Tap a line to copy it; copy or share the visible log list.
+- Confirmation before clearing the log view.
+
+The log buffer holds the most recent **250 entries in memory**. The filters
+match words in each message; they are not structured Xray log-level filters.
+
+### Local storage
+
+Profiles and settings are stored in the app's private Android DataStore. The
+app has no account, advertising, analytics or telemetry SDK in its declared
+dependencies. Network traffic still goes to the endpoints and DNS servers used
+by your configuration. Exported files and copied text leave app-private storage
+when you choose those actions.
+
+## Protocols and transports
+
+These are the choices exposed by the Android profile editor:
+
+| Category | Options |
+| --- | --- |
+| Protocol | VLESS, VMess, Trojan |
+| Transport | TCP, WebSocket, gRPC, HTTP Upgrade, SplitHTTP / XHTTP, mKCP |
+| Security | None, TLS, REALITY |
+| Payload connection | Direct, Proxy |
+| App routing | All apps, Only selected, Exclude selected |
+
+The selected protocol, transport and security combination must also be supported
+by your server. Payload injection uses TCP streams; it is not a UDP/mKCP
+injector.
+
+See the
+[profile model](android/app/src/main/java/com/libsvpn/tunnel/model/TunnelProfile.kt)
+and
+[configuration builder](android/app/src/main/java/com/libsvpn/tunnel/engine/EngineConfigBuilder.kt)
+for the stored fields and generated Xray configuration.
+
+## Payload injection
+
+Libs Tunnel includes a local injector in the Xray connection path. Enable it in
+the profile's **PAYLOAD** section, choose a mode and enter a payload appropriate
+for your endpoint.
+
+| Mode | Socket destination | Behavior |
+| --- | --- | --- |
+| **Direct** | Profile server and port | Sends the payload to the target before forwarding Xray's stream. |
+| **Proxy** | Configured proxy host and port | Sends the payload to the proxy; target placeholders still refer to the profile server. |
+
+The Android app sends only these two modes. Xray's TLS/REALITY and server-name
+settings belong to the underlying protocol connection and are configured
+separately in **TRANSPORT**.
+
+### Payload placeholders
+
+| Token | Replacement |
+| --- | --- |
+| `[host]`, `[port]`, `[host_port]` | Original target host, port, or host-and-port |
+| `[method]` | `CONNECT` in the app-generated configuration |
+| `[protocol]` | `HTTP/1.1` in the app-generated configuration |
+| `[ua]` | Configured user-agent value |
+| `[real_raw]` | Original target address in host-and-port form |
+| `[crlf]`, `[lfcr]`, `[cr]`, `[lf]` | Line-ending characters |
+| `[split]` | Splits the payload into separate writes |
+| `[split=N]` | Splits and delays the next write by `N` milliseconds, from `0` to `60000` |
+
+The app's default response handling reads HTTP-like headers and accepts status
+`101` or `200` before bridging the stream. A compatible server or proxy must
+understand the payload; the template alone does not provide connectivity.
+Details are in [docs/CONFIG.md](docs/CONFIG.md) and
+[engine/payload.go](engine/payload.go).
+
+## How it works
+
+```text
+Routed application traffic
+  -> Android VpnService TUN interface
+  -> tun2socks / gVisor network stack
+  -> local SOCKS5 inbound
+  -> Xray outbound
+  -> remote server
+
+With payload injection enabled:
+  Xray outbound
+    -> local injector listener
+    -> Direct target or configured Proxy
+    -> remote server
+```
+
+When injection is enabled, the engine records the original outbound destination
+and rewrites that outbound to a localhost listener. The injector opens the
+remote TCP socket, writes the payload, processes the configured response and
+then bridges the byte stream.
+
+The Android service installs routes and DNS settings. Socket protection and
+app-exclusion rules are used to keep the engine's outbound connections outside
+the VPN route. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
+[HeadlessVpnService.kt](android/app/src/main/java/com/libsvpn/tunnel/service/HeadlessVpnService.kt)
+and [engine/injector.go](engine/injector.go).
 
 ## Build from source
 
-### Requirements
+### Toolchain
 
-| Tool | Version |
+| Component | Repository configuration |
 | --- | --- |
-| JDK | 17 or newer, verified on 21 |
-| Go | 1.26.3 or newer |
-| Android SDK | Platform 36 with build-tools |
-| Android NDK | Any recent release |
-| Gradle | Provided by the bundled wrapper, 8.11.1 |
+| JDK | 17 or 21; the published APK was assembled with JDK 21 |
+| Go | `1.26.3` in `engine/go.mod` |
+| Android SDK | Platform 36, Build-Tools and accepted SDK licenses |
+| Android NDK | Required by gomobile; the build script does not pin an NDK version |
+| Gradle | Bundled wrapper: `8.11.1` |
+| Android Gradle Plugin | `8.9.2` |
+| Kotlin | `2.1.20` |
 
-Set `ANDROID_HOME`, or copy
-[android/local.properties.example](android/local.properties.example) to
-`android/local.properties` and point `sdk.dir` at your SDK.
+Use an SDK/NDK toolchain compatible with your host. On ARM64 Linux, the usual
+Google Linux AAPT2 binary is x86-64; a compatible binary or an emulation wrapper
+is needed. This does not change the APK's `arm64-v8a` target.
 
-### Commands
+### Build commands
 
 ```bash
 git clone https://github.com/yeasinulhoquetuhin/LibsTunnel.git
 cd LibsTunnel
 
-sh scripts/build-engine.sh    # runs the Go tests, builds the engine AAR
-sh scripts/build-android.sh   # assembles the debug APK
+export ANDROID_HOME=/path/to/android-sdk
+export PATH="$(go env GOPATH)/bin:$PATH"
+chmod +x android/gradlew
+mkdir -p android/app/libs
+
+sh scripts/build-engine.sh
+sh scripts/build-android.sh
 ```
 
-The first command writes `android/app/libs/vpncore.aar`. That file is a build
-artifact and is deliberately not committed, so every clone rebuilds it from the
-Go sources. The second command writes
-`android/app/build/outputs/apk/debug/app-debug.apk`.
+The SDK must include an Android NDK installation. The engine script downloads
+Go modules, runs the Go tests and uses gomobile to build
+`android/app/libs/vpncore.aar` for Android ARM64/API 24. If gomobile is absent,
+the script installs gomobile and gobind from its pinned `golang.org/x/mobile`
+version.
 
-### Project layout
+The Android script assembles the debug variant and writes
+`android/app/build/outputs/apk/debug/app-debug.apk`. Generated AAR files are
+ignored by Git, so a fresh clone needs the engine build first. The scripts
+assemble a debug-signed APK; signing with your own release key requires separate
+Gradle signing configuration.
+
+For an AAPT2 override on an ARM64 Linux build host:
+
+```bash
+cd android
+./gradlew -Pandroid.aapt2FromMavenOverride=/path/to/aapt2 assembleDebug
+```
+
+The [CI workflow](.github/workflows/ci.yml) defines Go formatting, vet and test
+jobs plus an Android debug-build job. Its current status is shown by the CI
+badge above.
+
+## Project layout
 
 ```text
 LibsTunnel/
-├── android/                     Android application module
-│   ├── app/src/main/java/com/libsvpn/tunnel/
-│   │   ├── core/                Bridge to the Go engine
-│   │   ├── data/                Profile repository, share-link codec
-│   │   ├── engine/              Engine configuration builder
-│   │   ├── model/               Profile schema and validation
-│   │   ├── service/             Headless VpnService, commands, state bus
-│   │   └── ui/                  Compose screens and theme
-│   └── gradlew                  Bundled Gradle wrapper
-├── engine/                      Go engine
-│   ├── cmd/vpncore/             Command line entry point
-│   ├── examples/                Safe placeholder profiles
-│   ├── manager.go               Lifecycle of Xray, injector and tun2socks
-│   ├── injector.go              Payload injection
-│   ├── tun.go                   TUN descriptor handling
-│   └── xray_config.go           Xray configuration generation
-├── scripts/                     Reproducible build commands
-├── docs/                        Architecture, build, configuration, reference
-├── third_party/                 Dependency inventory and license texts
-├── CHANGELOG.md
-├── CONTRIBUTING.md
-├── LICENSE
-└── SECURITY.md
+  android/               Android app and Gradle wrapper
+    app/src/main/java/com/libsvpn/tunnel/
+      core/              gomobile bridge
+      data/              DataStore repository and .libs/share-link codec
+      engine/            Android-to-Xray configuration builder
+      model/             Profile fields, settings and validation
+      service/           VPN service, commands and runtime state
+      ui/                Compose screens and themes
+  engine/                Go tunnel engine and tests
+    cmd/vpncore/         Command-line entry point
+    examples/            Placeholder engine configurations
+  scripts/               Engine and Android build scripts
+  docs/                  Architecture, build and configuration documentation
+  third_party/           Dependency notices
+  CHANGELOG.md           Release changes
+  CONTRIBUTING.md        Contribution guide
+  LICENSE                Project license declaration
+  SECURITY.md            Security reporting guide
 ```
-
-## How it works
-
-```text
-application traffic
-  -> Android TUN descriptor
-  -> gVisor TCP and UDP stack
-  -> local SOCKS5 inbound
-  -> Xray outbound
-  -> local payload injector
-  -> outer TLS or payload
-  -> remote endpoint
-```
-
-The injector records the original destination before Xray starts and then points
-Xray at a loopback port it owns, so the payload can be inserted below the
-protocol layer without knowing which protocol is in use. Every remote socket is
-passed through `VpnService.protect` to avoid a routing loop.
-
-The payload injector is part of this chain, not a separate external tool: the
-payload is written into the Xray transport itself, in Direct or Proxy mode. A longer explanation is in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
-[docs/CONFIG.md](docs/CONFIG.md).
 
 ## Documentation
 
-| Document | Contents |
+| Document | Purpose |
 | --- | --- |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Components, injector, socket loop prevention |
-| [docs/BUILD.md](docs/BUILD.md) | Toolchain and build commands |
-| [docs/CONFIG.md](docs/CONFIG.md) | Profile schema and the engine configuration |
-| [CHANGELOG.md](CHANGELOG.md) | Release history |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | How to contribute |
-| [SECURITY.md](SECURITY.md) | How to report a vulnerability |
-
-## Not yet exposed
-
-- OpenVPN is not implemented.
-- DNSTT is not implemented.
-
-## Contributing
-
-Issues and pull requests are welcome. Read
-[CONTRIBUTING.md](CONTRIBUTING.md) first, and never include a real server
-address, UUID, password, private key or exported profile in an issue or a pull
-request.
+| [Architecture](docs/ARCHITECTURE.md) | Engine, injector, TUN integration and socket protection |
+| [Build guide](docs/BUILD.md) | Build scripts and generated artifacts |
+| [Configuration](docs/CONFIG.md) | Injection modes, placeholders and response handling |
+| [Changelog](CHANGELOG.md) | Version changes |
+| [Contributing](CONTRIBUTING.md) | Contribution workflow |
+| [Security](SECURITY.md) | Security issue reporting |
+| [Dependency notices](third_party/NOTICE.md) | Dependency versions and licenses |
 
 ## License
 
-Libs Tunnel is released under **GPL-3.0-only**. That is the project's own
-choice: the pinned dependencies are MPL-2.0 (Xray-core), MIT (tun2socks) and
-Apache-2.0 (gVisor), and each of them may be combined into a GPL version 3
-work. Xray-core itself remains under MPL-2.0.
+Libs Tunnel declares **GPL-3.0-only** in [LICENSE](LICENSE). The full GPLv3 text
+is available from [GNU](https://www.gnu.org/licenses/gpl-3.0.html). Dependencies
+retain their own licenses:
 
-If you distribute a binary built from this repository, ship this repository at
-a matching tag as the complete corresponding source, as GPL-3.0-only requires.
+| Component | Version in `engine/go.mod` | License |
+| --- | --- | --- |
+| [Xray-core](https://github.com/XTLS/Xray-core) | `v1.260327.0` | MPL-2.0 |
+| [tun2socks](https://github.com/xjasonlyu/tun2socks) | `v2.7.0` | MIT |
+| [gVisor](https://gvisor.dev/) | `v0.0.0-20260701204157-69c2d17aea96` | Apache-2.0 |
 
-The full inventory of dependencies, with the exact pinned versions and copies
-of their license texts, is in
-[third_party/NOTICE.md](third_party/NOTICE.md).
-
-## Acknowledgements
-
-- [XTLS/Xray-core](https://github.com/XTLS/Xray-core) for the protocol engine.
-- [xjasonlyu/tun2socks](https://github.com/xjasonlyu/tun2socks) for the TUN to
-  SOCKS bridge.
-- [gVisor](https://gvisor.dev) for the userspace network stack.
-- [Jetpack Compose](https://developer.android.com/jetpack/compose) and
-  [AndroidX](https://developer.android.com/jetpack/androidx) for the client.
+The Android client uses Jetpack Compose, AndroidX and Kotlin serialization.
+Dependency notices are listed in [third_party/NOTICE.md](third_party/NOTICE.md);
+Go dependency versions are recorded in [engine/go.mod](engine/go.mod) and
+[engine/go.sum](engine/go.sum).
 
 ## Author
 
 **Yeasinul Hoque Tuhin**
 
-- <https://tuhinbro.com>
-- <https://t.me/TuhinBroh>
-- <https://t.me/TDZ_CHAT>
+- Website: <https://tuhinbro.com>
+- Email: <mailto:i@tuhinbro.com>
+- Channel: <https://t.me/TuhinBroh>
+- Community: <https://t.me/TDZ_CHAT>
