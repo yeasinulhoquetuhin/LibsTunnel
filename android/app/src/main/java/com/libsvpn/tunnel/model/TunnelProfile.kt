@@ -30,9 +30,7 @@ enum class SecurityType(val title: String) {
 @Serializable
 enum class PayloadMode(val title: String, val engineValue: String) {
     DIRECT("Direct", "direct"),
-    DIRECT_SNI("Direct + SNI", "direct-sni"),
-    PROXY("Proxy", "proxy"),
-    PROXY_SNI("Proxy + SNI", "proxy-sni")
+    PROXY("Proxy", "proxy")
 }
 
 @Serializable
@@ -48,7 +46,7 @@ data class TunnelProfile(
     val name: String = "New tunnel",
     val type: TunnelType = TunnelType.VLESS,
     val server: String = "",
-    val port: Int = 443,
+    val port: Int = 0,
     val userId: String = "",
     val password: String = "",
     val encryption: String = "none",
@@ -82,8 +80,7 @@ data class TunnelProfile(
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 ) {
-    fun endpoint(): String =
-        if (server.isBlank()) "Not configured" else "$server:$port"
+    fun endpoint(): String = if (server.isBlank() || port !in 1..65535) "Not configured" else "$server:$port"
 
     fun validationErrors(): List<String> = buildList {
         if (name.isBlank()) add("Profile name is required")
@@ -97,7 +94,7 @@ data class TunnelProfile(
         if (security == SecurityType.REALITY && realityPublicKey.isBlank()) {
             add("REALITY public key is required")
         }
-        if (payloadEnabled && payloadMode in setOf(PayloadMode.PROXY, PayloadMode.PROXY_SNI)) {
+        if (payloadEnabled && payloadMode == PayloadMode.PROXY) {
             if (proxyHost.isBlank() || proxyPort !in 1..65535) add("Payload proxy is invalid")
         }
         if (appRoutingMode == AppRoutingMode.INCLUDE && applications.isEmpty()) {
@@ -120,7 +117,8 @@ enum class AccentColor(val title: String, val rgb: Long) {
     PURPLE("Purple", 0xFF6750A4),
     ORANGE("Orange", 0xFF9A4522),
     RED("Red", 0xFFB3261E),
-    TEAL("Teal", 0xFF006A6A)
+    TEAL("Teal", 0xFF006A6A),
+    PINK("Pink", 0xFF9C3D70)
 }
 
 @Serializable
@@ -129,7 +127,8 @@ data class AppSettings(
     val accent: AccentColor = AccentColor.GREEN,
     val dynamicColor: Boolean = false,
     val showConnectionStats: Boolean = true,
-    val keepScreenOn: Boolean = false
+    val keepScreenOn: Boolean = false,
+    val hapticFeedback: Boolean = true
 )
 
 @Serializable

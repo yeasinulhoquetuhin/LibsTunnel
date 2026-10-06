@@ -13,8 +13,8 @@ android {
         applicationId = "com.libsvpn.tunnel"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1000
-        versionName = "1.0.0"
+        versionCode = 1001
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk.abiFilters += "arm64-v8a"

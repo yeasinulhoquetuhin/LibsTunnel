@@ -6,6 +6,7 @@ import android.net.Uri
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
+import android.provider.OpenableColumns
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -21,6 +22,7 @@ import com.libsvpn.tunnel.ui.LibsTunnelApp
 class MainActivity : ComponentActivity() {
     private val viewModel by viewModels<AppViewModel>()
     private var pendingExport: String? = null
+    private var pendingImportSelection: ((String, String) -> Unit)? = null
 
     private val vpnPermission = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (VpnService.prepare(this) == null) viewModel.startSelected()
@@ -30,8 +32,18 @@ class MainActivity : ComponentActivity() {
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     private val openProfile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val callback = pendingImportSelection
+        pendingImportSelection = null
         uri ?: return@registerForActivityResult
-        importUri(uri)
+        runCatching {
+            val content = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                ?: error("Unable to read config file")
+            val name = contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+                ?: uri.lastPathSegment.orEmpty()
+            content to name
+        }.onSuccess { (content, name) -> callback?.invoke(content, name) }
+            .onFailure { viewModel.message(it.message ?: "Unable to read config file") }
     }
 
     private val createProfile = registerForActivityResult(
@@ -73,7 +85,10 @@ class MainActivity : ComponentActivity() {
                             if (permission == null) viewModel.startSelected() else vpnPermission.launch(permission)
                         }
                     },
-                    onImportFile = { openProfile.launch(arrayOf("*/*")) },
+                    onImportFile = { onSelected ->
+                        pendingImportSelection = onSelected
+                        openProfile.launch(arrayOf("*/*"))
+                    },
                     onExportFile = { content, fileName ->
                         pendingExport = content
                         createProfile.launch(fileName.sanitizeFileName() + LibsConfigCodec.EXTENSION)

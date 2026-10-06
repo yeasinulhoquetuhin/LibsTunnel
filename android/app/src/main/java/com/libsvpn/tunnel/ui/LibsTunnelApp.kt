@@ -1,5 +1,8 @@
 package com.libsvpn.tunnel.ui
 
+import android.content.Intent
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -32,6 +35,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,13 +58,17 @@ import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.FileUpload
 import androidx.compose.material.icons.rounded.Forum
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Speed
 import androidx.compose.material.icons.rounded.Storage
 import androidx.compose.material.icons.rounded.Terminal
@@ -94,7 +102,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -102,6 +112,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -114,8 +125,11 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -149,12 +163,14 @@ private enum class AppSection(val title: String, val icon: ImageVector) {
     SETTINGS("Settings", Icons.Rounded.Settings)
 }
 
+private val LocalActionHaptic = staticCompositionLocalOf<(HapticFeedbackType) -> Unit> { {} }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibsTunnelApp(
     viewModel: AppViewModel,
     onConnect: () -> Unit,
-    onImportFile: () -> Unit,
+    onImportFile: ((String, String) -> Unit) -> Unit,
     onExportFile: (String, String) -> Unit,
     onOpenUrl: (String) -> Unit
 ) {
@@ -166,23 +182,35 @@ fun LibsTunnelApp(
     var editing by remember { mutableStateOf<TunnelProfile?>(null) }
     var showImport by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
+    var exportProfile by remember { mutableStateOf<TunnelProfile?>(null) }
+    var showAbout by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<TunnelProfile?>(null) }
+    val hapticsEnabled = store.settings.hapticFeedback
+    val performHaptic: (HapticFeedbackType) -> Unit = { type ->
+        if (hapticsEnabled) haptic.performHapticFeedback(type)
+    }
     val installedApps by produceState<List<InstalledApp>>(emptyList()) {
         value = viewModel.installedApps()
+    }
+
+    BackHandler(enabled = editing != null || section != AppSection.HOME) {
+        if (editing != null) editing = null else section = AppSection.HOME
     }
 
     LaunchedEffect(Unit) {
         viewModel.messages.collect { snackbar.showSnackbar(it) }
     }
-    LaunchedEffect(runtime.status) {
+    LaunchedEffect(runtime.status, hapticsEnabled) {
         if (runtime.status == VpnStatus.CONNECTED || runtime.status == VpnStatus.ERROR) {
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            performHaptic(HapticFeedbackType.LongPress)
         }
     }
 
     val tick = {
-        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        performHaptic(HapticFeedbackType.TextHandleMove)
     }
 
+    CompositionLocalProvider(LocalActionHaptic provides performHaptic) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth >= 720.dp
         Scaffold(
@@ -190,7 +218,7 @@ fun LibsTunnelApp(
             snackbarHost = { SnackbarHost(snackbar) },
             topBar = {
                 if (editing == null) {
-                    AppTopBar(runtime)
+                    AppTopBar(onAbout = { showAbout = true })
                 } else {
                     CenterAlignedTopAppBar(
                         title = { Text("Profile", fontWeight = FontWeight.Bold) },
@@ -218,11 +246,20 @@ fun LibsTunnelApp(
             },
             floatingActionButton = {
                 if (editing == null && section == AppSection.PROFILES) {
-                    ExtendedFloatingActionButton(
-                        onClick = { tick(); editing = TunnelProfile() },
-                        icon = { Icon(Icons.Rounded.Add, null) },
-                        text = { Text("New profile") }
-                    )
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        ExtendedFloatingActionButton(
+                            onClick = { tick(); showImport = true },
+                            modifier = Modifier.width(220.dp),
+                            icon = { Icon(Icons.Rounded.FileUpload, null) },
+                            text = { Text("Import profile") }
+                        )
+                        ExtendedFloatingActionButton(
+                            onClick = { tick(); editing = TunnelProfile() },
+                            modifier = Modifier.width(220.dp),
+                            icon = { Icon(Icons.Rounded.Add, null) },
+                            text = { Text("New profile") }
+                        )
+                    }
                 }
             }
         ) { padding ->
@@ -249,6 +286,7 @@ fun LibsTunnelApp(
                             installedApps = installedApps,
                             onCancel = { editing = null },
                             onSave = {
+                                performHaptic(HapticFeedbackType.Confirm)
                                 viewModel.save(it)
                                 editing = null
                                 section = AppSection.PROFILES
@@ -260,25 +298,38 @@ fun LibsTunnelApp(
                                 store = store,
                                 runtime = runtime,
                                 onConnect = {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    performHaptic(
+                                        if (runtime.status == VpnStatus.CONNECTED) HapticFeedbackType.ToggleOff
+                                        else HapticFeedbackType.ToggleOn
+                                    )
                                     onConnect()
                                 },
-                                onSelect = viewModel::select,
-                                onEdit = { editing = it },
+                                onSelect = { tick(); viewModel.select(it) },
+                                onEdit = { tick(); editing = it },
                                 onProfiles = { section = AppSection.PROFILES }
                             )
                             AppSection.PROFILES -> ProfilesScreen(
                                 store = store,
-                                onSelect = viewModel::select,
+                                activeProfileName = runtime.profileName.takeIf {
+                                    runtime.status in setOf(VpnStatus.CONNECTED, VpnStatus.CONNECTING, VpnStatus.STOPPING)
+                                },
+                                onSelect = { tick(); viewModel.select(it) },
                                 onEdit = {
+                                    tick()
                                     if (it.locked) viewModel.message(it.lockMessage) else editing = it
                                 },
-                                onDuplicate = viewModel::duplicate,
-                                onDelete = viewModel::delete,
+                                onDuplicate = { tick(); viewModel.duplicate(it) },
+                                onDelete = {
+                                    performHaptic(HapticFeedbackType.Reject)
+                                    if (runtime.status in setOf(VpnStatus.CONNECTED, VpnStatus.CONNECTING, VpnStatus.STOPPING) && it.name == runtime.profileName) {
+                                        viewModel.message("Stop this profile before deleting it")
+                                    } else pendingDelete = it
+                                },
+                                onToggleLock = { performHaptic(HapticFeedbackType.Confirm); viewModel.toggleLock(it) },
                                 onImport = { showImport = true },
-                                onExport = { showExport = true }
+                                onExport = { exportProfile = it; showExport = true }
                             )
-                            AppSection.LOGS -> LogsScreen(runtime, viewModel::clearLogs)
+                            AppSection.LOGS -> LogsScreen(runtime, viewModel::clearLogs, performHaptic)
                             AppSection.SETTINGS -> SettingsScreen(
                                 settings = store.settings,
                                 onUpdate = viewModel::updateSettings,
@@ -293,37 +344,64 @@ fun LibsTunnelApp(
 
     if (showImport) {
         ImportDialog(
+            hapticsEnabled = hapticsEnabled,
             onDismiss = { showImport = false },
-            onFile = {
-                showImport = false
-                onImportFile()
+            onFile = { onSelected ->
+                performHaptic(HapticFeedbackType.TextHandleMove)
+                onImportFile(onSelected)
             },
-            onImport = { raw, passphrase ->
-                viewModel.importText(raw, passphrase)
+            onImport = { raw ->
+                performHaptic(HapticFeedbackType.Confirm)
+                viewModel.importText(raw)
                 showImport = false
             }
         )
     }
     if (showExport) {
         ExportDialog(
-            profile = store.selected,
-            onDismiss = { showExport = false },
-            onExport = { passphrase ->
-                val content = viewModel.exportSelected(passphrase)
-                val selected = store.selected
-                if (content != null && selected != null) {
-                    onExportFile(content, selected.name)
-                    showExport = false
-                }
+            profile = exportProfile,
+            hapticsEnabled = hapticsEnabled,
+            onDismiss = { showExport = false; exportProfile = null },
+            onSaveFile = { content, fileName ->
+                performHaptic(HapticFeedbackType.Confirm)
+                onExportFile(content, fileName)
+                showExport = false
+                exportProfile = null
             }
         )
+    }
+    if (showAbout) {
+        AboutDialog(onDismiss = { showAbout = false }, onOpenUrl = onOpenUrl)
+    }
+    pendingDelete?.let { profile ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            icon = { Icon(Icons.Rounded.Delete, null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Delete config?") },
+            text = { Text("${profile.name} will be permanently removed from this device.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        performHaptic(HapticFeedbackType.Reject)
+                        viewModel.delete(profile)
+                        pendingDelete = null
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } }
+        )
+    }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AppTopBar(runtime: VpnRuntimeState) {
-    CenterAlignedTopAppBar(
+private fun AppTopBar(onAbout: () -> Unit) {
+    val haptic = LocalActionHaptic.current
+    TopAppBar(
         modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars),
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -333,39 +411,43 @@ private fun AppTopBar(runtime: VpnRuntimeState) {
                     modifier = Modifier.size(30.dp).clip(RoundedCornerShape(9.dp))
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("LIBS TUNNEL", fontWeight = FontWeight.Black, letterSpacing = 1.sp, fontSize = 17.sp)
+                Text("Libs Tunnel", fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
         },
         actions = {
-            StatusPill(runtime.status)
-            Spacer(Modifier.width(10.dp))
+            IconButton(onClick = { haptic(HapticFeedbackType.TextHandleMove); onAbout() }) { Icon(Icons.Rounded.Info, "About") }
         }
     )
 }
 
 @Composable
-private fun StatusPill(status: VpnStatus) {
-    val color = when (status) {
-        VpnStatus.CONNECTED -> MaterialTheme.colorScheme.primary
-        VpnStatus.CONNECTING, VpnStatus.STOPPING -> Color(0xFFF4A261)
-        VpnStatus.ERROR -> MaterialTheme.colorScheme.error
-        VpnStatus.DISCONNECTED -> MaterialTheme.colorScheme.outline
-    }
-    Surface(color = color.copy(alpha = 0.12f), shape = CircleShape) {
-        Row(
-            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(Modifier.size(6.dp).background(color, CircleShape))
-            Spacer(Modifier.width(5.dp))
-            Text(
-                status.name,
-                color = color,
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
+private fun AboutDialog(onDismiss: () -> Unit, onOpenUrl: (String) -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Image(painterResource(R.drawable.libs_logo), null, Modifier.size(52.dp).clip(RoundedCornerShape(14.dp))) },
+        title = { Text("About Libs Tunnel", fontWeight = FontWeight.Black) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · GPL-3.0-only", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                Text("A local-first Android VPN client built around Xray-core. Create or import VLESS, VMess and Trojan profiles, choose routing and DNS options, then connect with the Android VPN service.")
+                Text("Transports: TCP, WebSocket, gRPC, HTTP Upgrade, XHTTP and mKCP. Security: TLS and REALITY.", style = MaterialTheme.typography.bodySmall)
+                Text("Engine: Xray v26.3.27 · tun2socks v2.7.0", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                Text("Profiles and credentials stay in app-private storage. No account, ads, analytics or telemetry.", style = MaterialTheme.typography.bodySmall)
+                Text("Built by Yeasinul Hoque Tuhin", style = MaterialTheme.typography.labelMedium)
+                OutlinedButton(onClick = { onOpenUrl("https://github.com/yeasinulhoquetuhin/LibsTunnel") }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Rounded.Code, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Source code on GitHub")
+                }
+                OutlinedButton(onClick = { onOpenUrl("https://t.me/TuhinBroh") }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Rounded.Campaign, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Channel  @TuhinBroh")
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+    )
 }
 
 @Composable
@@ -612,12 +694,14 @@ private fun ConfigSelector(
 @Composable
 private fun ProfilesScreen(
     store: ProfileStore,
+    activeProfileName: String?,
     onSelect: (TunnelProfile) -> Unit,
     onEdit: (TunnelProfile) -> Unit,
     onDuplicate: (TunnelProfile) -> Unit,
     onDelete: (TunnelProfile) -> Unit,
+    onToggleLock: (TunnelProfile) -> Unit,
     onImport: () -> Unit,
-    onExport: () -> Unit
+    onExport: (TunnelProfile) -> Unit
 ) {
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -625,8 +709,6 @@ private fun ProfilesScreen(
                 Text("Profiles", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
                 Text("${store.profiles.size} saved", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
             }
-            IconButton(onClick = onImport) { Icon(Icons.Rounded.FileUpload, "Import") }
-            IconButton(onClick = onExport, enabled = store.selected != null) { Icon(Icons.Rounded.FileDownload, "Export") }
         }
         if (store.profiles.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -645,10 +727,13 @@ private fun ProfilesScreen(
                     ProfileListItem(
                         profile = profile,
                         selected = profile.id == store.selected?.id,
+                        active = profile.name == activeProfileName,
                         onSelect = { onSelect(profile) },
                         onEdit = { onEdit(profile) },
                         onDuplicate = { onDuplicate(profile) },
-                        onDelete = { onDelete(profile) }
+                        onDelete = { onDelete(profile) },
+                        onToggleLock = { onToggleLock(profile) },
+                        onExport = { onExport(profile) }
                     )
                 }
             }
@@ -660,12 +745,16 @@ private fun ProfilesScreen(
 private fun ProfileListItem(
     profile: TunnelProfile,
     selected: Boolean,
+    active: Boolean,
     onSelect: () -> Unit,
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onToggleLock: () -> Unit,
+    onExport: () -> Unit
 ) {
     var menu by remember { mutableStateOf(false) }
+    val haptic = LocalActionHaptic.current
     OutlinedCard(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onSelect),
         shape = RoundedCornerShape(16.dp),
@@ -701,13 +790,28 @@ private fun ProfileListItem(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
-            }
+                }
             Box {
-                IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "Actions") }
+                IconButton(onClick = { haptic(HapticFeedbackType.TextHandleMove); menu = true }) { Icon(Icons.Rounded.MoreVert, "Actions") }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    DropdownMenuItem(text = { Text("Edit") }, leadingIcon = { Icon(Icons.Rounded.Edit, null) }, onClick = { menu = false; onEdit() })
-                    DropdownMenuItem(text = { Text("Duplicate") }, leadingIcon = { Icon(Icons.Rounded.ContentCopy, null) }, onClick = { menu = false; onDuplicate() })
-                    DropdownMenuItem(text = { Text("Delete") }, leadingIcon = { Icon(Icons.Rounded.Delete, null) }, onClick = { menu = false; onDelete() }, enabled = !profile.locked)
+                    DropdownMenuItem(text = { Text("Edit") }, leadingIcon = { Icon(Icons.Rounded.Edit, null) }, onClick = { haptic(HapticFeedbackType.TextHandleMove); menu = false; onEdit() })
+                    DropdownMenuItem(text = { Text("Duplicate") }, leadingIcon = { Icon(Icons.Rounded.ContentCopy, null) }, onClick = { haptic(HapticFeedbackType.Confirm); menu = false; onDuplicate() })
+                    DropdownMenuItem(
+                        text = { Text("Export config") },
+                        leadingIcon = { Icon(Icons.Rounded.FileDownload, null) },
+                        onClick = { haptic(HapticFeedbackType.Confirm); menu = false; onExport() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (profile.locked) "Unlock config" else "Lock config") },
+                        leadingIcon = { Icon(if (profile.locked) Icons.Rounded.LockOpen else Icons.Rounded.Lock, null) },
+                        onClick = { haptic(HapticFeedbackType.ToggleOn); menu = false; onToggleLock() }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete") },
+                        leadingIcon = { Icon(Icons.Rounded.Delete, null) },
+                        onClick = { haptic(HapticFeedbackType.Reject); menu = false; onDelete() },
+                        enabled = !profile.locked && !active
+                    )
                 }
             }
         }
@@ -715,29 +819,122 @@ private fun ProfileListItem(
 }
 
 @Composable
-private fun LogsScreen(runtime: VpnRuntimeState, onClear: () -> Unit) {
+private fun LogsScreen(
+    runtime: VpnRuntimeState,
+    onClear: () -> Unit,
+    onHaptic: (HapticFeedbackType) -> Unit
+) {
+    var query by remember { mutableStateOf("") }
+    var filter by remember { mutableStateOf("All") }
+    var confirmClear by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    val visibleLogs = remember(runtime.logs, query, filter) {
+        runtime.logs.filter { line ->
+            val matchesQuery = query.isBlank() || line.contains(query, ignoreCase = true)
+            val matchesFilter = when (filter) {
+                "Errors" -> line.contains("error", true) || line.contains("failed", true)
+                "Warnings" -> line.contains("warn", true)
+                else -> true
+            }
+            matchesQuery && matchesFilter
+        }
+    }
+    LaunchedEffect(visibleLogs.size) {
+        if (visibleLogs.isNotEmpty()) listState.animateScrollToItem(visibleLogs.lastIndex)
+    }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Logs", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
-                Text("Engine events", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
+                Text("${visibleLogs.size} engine events", color = MaterialTheme.colorScheme.outline, style = MaterialTheme.typography.bodySmall)
             }
-            IconButton(onClick = onClear) { Icon(Icons.Rounded.DeleteSweep, "Clear logs") }
+            IconButton(onClick = {
+                onHaptic(HapticFeedbackType.TextHandleMove)
+                clipboard.setText(AnnotatedString(visibleLogs.joinToString("\n")))
+                Toast.makeText(context, "Logs copied", Toast.LENGTH_SHORT).show()
+            }, enabled = visibleLogs.isNotEmpty()) {
+                Icon(Icons.Rounded.ContentCopy, "Copy logs")
+            }
+            IconButton(onClick = {
+                onHaptic(HapticFeedbackType.ToggleOn)
+                if (visibleLogs.isNotEmpty()) {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "Libs Tunnel logs")
+                        putExtra(Intent.EXTRA_TEXT, visibleLogs.joinToString("\n"))
+                    }
+                    runCatching { context.startActivity(Intent.createChooser(intent, "Share logs")) }
+                }
+            }, enabled = visibleLogs.isNotEmpty()) {
+                Icon(Icons.Rounded.Share, "Share logs")
+            }
+            IconButton(onClick = { onHaptic(HapticFeedbackType.Reject); confirmClear = true }, enabled = runtime.logs.isNotEmpty()) {
+                Icon(Icons.Rounded.DeleteSweep, "Clear logs")
+            }
+        }
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            leadingIcon = { Icon(Icons.Rounded.Search, null) },
+            placeholder = { Text("Search logs") },
+            shape = RoundedCornerShape(14.dp)
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+            listOf("All", "Errors", "Warnings").forEach { option ->
+                FilterChip(selected = filter == option, onClick = { filter = option }, label = { Text(option) })
+            }
         }
         Surface(
             modifier = Modifier.fillMaxSize(),
             shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
             color = Color(0xFF0B0F0D)
         ) {
-            LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (runtime.logs.isEmpty()) {
-                    item { Text("Waiting for engine events...", color = Color(0xFF7F9C8D), fontFamily = FontFamily.Monospace) }
+            LazyColumn(state = listState, contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                if (visibleLogs.isEmpty()) {
+                    item {
+                        Text(
+                            if (runtime.logs.isEmpty()) "Waiting for engine events..." else "No matching log entries",
+                            color = Color(0xFF7F9C8D),
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
                 }
-                items(runtime.logs) { line ->
-                    Text(line, color = Color(0xFFA9E9C7), fontFamily = FontFamily.Monospace, fontSize = 12.sp)
+                items(visibleLogs) { line ->
+                    Text(
+                        line,
+                        color = when {
+                            line.contains("error", true) || line.contains("failed", true) -> Color(0xFFFF8A80)
+                            line.contains("warn", true) || line.contains("skipped", true) -> Color(0xFFFFD180)
+                            line.contains("connected", true) || line.contains("started", true) -> Color(0xFFA5D6A7)
+                            else -> Color(0xFFA9E9C7)
+                        },
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 12.sp,
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            onHaptic(HapticFeedbackType.TextHandleMove)
+                            clipboard.setText(AnnotatedString(line))
+                            Toast.makeText(context, "Log line copied", Toast.LENGTH_SHORT).show()
+                        }
+                    )
                 }
             }
         }
+    }
+    if (confirmClear) {
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            icon = { Icon(Icons.Rounded.DeleteSweep, null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Clear all logs?") },
+            text = { Text("This removes the current log history from the screen.") },
+            confirmButton = {
+                Button(onClick = { onHaptic(HapticFeedbackType.Reject); onClear(); confirmClear = false }) { Text("Clear logs") }
+            },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Cancel") } }
+        )
     }
 }
 
@@ -792,6 +989,9 @@ private fun SettingsScreen(
                     SwitchSetting("Dynamic color", "Use Android 12+ wallpaper colors (overrides accent)", settings.dynamicColor) {
                         onUpdate(settings.copy(dynamicColor = it))
                     }
+                    SwitchSetting("Haptic feedback", "Use different vibration patterns for app actions", settings.hapticFeedback) {
+                        onUpdate(settings.copy(hapticFeedback = it))
+                    }
                 }
             }
         }
@@ -807,11 +1007,11 @@ private fun SettingsScreen(
             }
         }
         item {
-            OutlinedCard(shape = RoundedCornerShape(16.dp)) {
-                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedCard(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth()) {
+                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Rounded.Security, null, tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(12.dp))
-                    Column {
+                    Column(Modifier.weight(1f)) {
                         Text("Local-first privacy", fontWeight = FontWeight.Bold)
                         Text("No ads, analytics, telemetry, or account SDKs.", style = MaterialTheme.typography.bodySmall)
                     }
@@ -834,7 +1034,18 @@ private fun SettingsScreen(
                         }
                     }
                     Text("Built by Yeasinul Hoque Tuhin", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "A free, local-first Android VPN client. Create, import, organize and protect your tunnel profiles, then connect through the bundled Xray engine.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Text(
+                        "Protocols: VLESS, VMess, Trojan\nTransports: TCP, WebSocket, gRPC, HTTP Upgrade, XHTTP and mKCP\nSecurity: TLS and REALITY",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Text("Xray v26.3.27 · tun2socks v2.7.0", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    Text("License: GPL-3.0-only", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                    Text("Profiles remain in app-private storage. No account, ads, analytics or telemetry.", style = MaterialTheme.typography.bodySmall)
                     HorizontalDivider()
                     OutlinedButton(onClick = { onOpenUrl("https://tuhinbro.com") }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                         Icon(Icons.Rounded.Public, null, modifier = Modifier.size(16.dp))
@@ -861,22 +1072,32 @@ private fun SettingsScreen(
 private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
     Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(6.dp))
-    ElevatedCard(shape = RoundedCornerShape(18.dp)) {
+    ElevatedCard(shape = RoundedCornerShape(18.dp), modifier = Modifier.fillMaxWidth()) {
         Column(content = content)
     }
 }
 
 @Composable
 private fun SwitchSetting(title: String, subtitle: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
+    val haptic = LocalActionHaptic.current
     Row(
-        Modifier.fillMaxWidth().clickable { onChecked(!checked) }.padding(16.dp),
+        Modifier.fillMaxWidth().clickable {
+            haptic(if (checked) HapticFeedbackType.ToggleOff else HapticFeedbackType.ToggleOn)
+            onChecked(!checked)
+        }.padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
             Text(title, fontWeight = FontWeight.SemiBold)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.outline)
         }
-        Switch(checked = checked, onCheckedChange = onChecked)
+        Switch(
+            checked = checked,
+            onCheckedChange = {
+                haptic(if (it) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
+                onChecked(it)
+            }
+        )
     }
 }
 
@@ -921,8 +1142,8 @@ private fun ProfileEditor(
                         singleLine = true
                     )
                     OutlinedTextField(
-                        value = draft.port.toString(),
-                        onValueChange = { value -> value.toIntOrNull()?.let { draft = draft.copy(port = it) } },
+                        value = draft.port.takeIf { it > 0 }?.toString().orEmpty(),
+                        onValueChange = { value -> draft = draft.copy(port = value.toIntOrNull() ?: 0) },
                         label = { Text("Port") },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
@@ -963,7 +1184,7 @@ private fun ProfileEditor(
                     SwitchSetting("Enable payload injection", "Add an outer TCP/TLS/proxy handshake", draft.payloadEnabled) { draft = draft.copy(payloadEnabled = it) }
                     if (draft.payloadEnabled) {
                         ChoiceField("Connection mode", draft.payloadMode, PayloadMode.entries.toList(), { it.title }) { draft = draft.copy(payloadMode = it) }
-                        if (draft.payloadMode in setOf(PayloadMode.PROXY, PayloadMode.PROXY_SNI)) {
+                        if (draft.payloadMode == PayloadMode.PROXY) {
                             OutlinedTextField(value = draft.proxyHost, onValueChange = { draft = draft.copy(proxyHost = it) }, label = { Text("Proxy server") }, modifier = Modifier.fillMaxWidth())
                             OutlinedTextField(value = draft.proxyPort.toString(), onValueChange = { it.toIntOrNull()?.let { port -> draft = draft.copy(proxyPort = port) } }, label = { Text("Proxy port") }, modifier = Modifier.fillMaxWidth())
                         }
@@ -1076,8 +1297,9 @@ private fun <T> ChoiceField(
     onSelected: (T) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val haptic = LocalActionHaptic.current
     Box(Modifier.fillMaxWidth()) {
-        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = { haptic(HapticFeedbackType.TextHandleMove); expanded = true }, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.Start) {
                 Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
                 Text(title(value), fontWeight = FontWeight.SemiBold)
@@ -1090,6 +1312,7 @@ private fun <T> ChoiceField(
                     text = { Text(title(option)) },
                     leadingIcon = { if (option == value) Icon(Icons.Rounded.Check, null) },
                     onClick = {
+                        haptic(HapticFeedbackType.Confirm)
                         onSelected(option)
                         expanded = false
                     }
@@ -1149,46 +1372,138 @@ private fun AppSelectionDialog(
 }
 
 @Composable
-private fun ImportDialog(onDismiss: () -> Unit, onFile: () -> Unit, onImport: (String, String) -> Unit) {
+private fun ImportDialog(
+    hapticsEnabled: Boolean,
+    onDismiss: () -> Unit,
+    onFile: (((String, String) -> Unit) -> Unit),
+    onImport: (String) -> Unit
+) {
+    val haptic = LocalHapticFeedback.current
     var raw by remember { mutableStateOf("") }
-    var passphrase by remember { mutableStateOf("") }
+    var fileContent by remember { mutableStateOf<String?>(null) }
+    var fileName by remember { mutableStateOf<String?>(null) }
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = { Icon(Icons.Rounded.FileUpload, null) },
         title = { Text("Import profile") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = onFile, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(
+                    onClick = {
+                        onFile { content, name ->
+                            fileContent = content
+                            fileName = name
+                            raw = ""
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     Icon(Icons.Rounded.FileUpload, null)
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(6.dp))
                     Text("Open .libs file")
+                }
+                if (fileName != null) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Rounded.FileUpload, null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(8.dp))
+                            Text(fileName.orEmpty(), modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            IconButton(onClick = {
+                                if (hapticsEnabled) haptic.performHapticFeedback(HapticFeedbackType.Reject)
+                                fileName = null
+                                fileContent = null
+                            }) {
+                                Icon(Icons.Rounded.Close, "Remove selected file")
+                            }
+                        }
+                    }
                 }
                 Text("or paste a .libs payload, VLESS, VMess, or Trojan link", style = MaterialTheme.typography.bodySmall)
                 OutlinedTextField(value = raw, onValueChange = { raw = it }, label = { Text("Configuration or share link") }, minLines = 5, modifier = Modifier.fillMaxWidth())
-                SecretField("Passphrase for encrypted .libs", passphrase) { passphrase = it }
             }
         },
-        confirmButton = { Button(onClick = { onImport(raw, passphrase) }, enabled = raw.isNotBlank()) { Text("Import") } },
+        confirmButton = {
+            Button(
+                onClick = { onImport(fileContent ?: raw) },
+                enabled = fileContent != null || raw.isNotBlank()
+            ) { Text("Import") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
 
 @Composable
-private fun ExportDialog(profile: TunnelProfile?, onDismiss: () -> Unit, onExport: (String) -> Unit) {
-    var passphrase by remember { mutableStateOf("") }
+private fun ExportDialog(
+    profile: TunnelProfile?,
+    hapticsEnabled: Boolean,
+    onDismiss: () -> Unit,
+    onSaveFile: (String, String) -> Unit
+) {
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
+    val content = remember(profile) { profile?.let(LibsConfigCodec::export) }
+    val safeProfileName = remember(profile?.name) {
+        profile?.name.orEmpty().replace(Regex("[^A-Za-z0-9._-]+"), "-").trim('-').ifBlank { "libs-profile" }
+    }
+    val fileName = safeProfileName + LibsConfigCodec.EXTENSION
+
+    fun feedback(text: String) = Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Rounded.Lock, null) },
+        icon = { Icon(Icons.Rounded.FileDownload, null) },
         title = { Text("Export ${profile?.name.orEmpty()}") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Add a passphrase for AES-256-GCM encryption, or leave it blank for a portable plain profile.", style = MaterialTheme.typography.bodySmall)
-                SecretField("Optional passphrase", passphrase) { passphrase = it }
-                Text("File extension: ${LibsConfigCodec.EXTENSION}", fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.labelSmall)
+                Text("Export this profile as a .libs config file.", style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = {
+                            if (hapticsEnabled) haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+                            content?.let { onSaveFile(it, profile?.name ?: "libs-profile") }
+                        },
+                        enabled = content != null,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Rounded.FileDownload, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("File")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            if (hapticsEnabled) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            content?.let {
+                                clipboard.setText(AnnotatedString(it))
+                                feedback("Config copied to clipboard")
+                            }
+                        },
+                        enabled = content != null,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Rounded.ContentCopy, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Copy")
+                    }
+                }
+                Text(
+                    "File name: $fileName",
+                    fontFamily = FontFamily.Monospace,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
             }
         },
-        confirmButton = { Button(onClick = { onExport(passphrase) }, enabled = profile != null) { Text("Export") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
     )
 }
 

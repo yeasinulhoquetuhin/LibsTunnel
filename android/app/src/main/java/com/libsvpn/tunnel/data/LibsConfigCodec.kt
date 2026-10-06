@@ -12,20 +12,12 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
-import java.security.SecureRandom
-import javax.crypto.Cipher
-import javax.crypto.SecretKeyFactory
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.PBEKeySpec
-import javax.crypto.spec.SecretKeySpec
 
 object LibsConfigCodec {
     const val EXTENSION = ".libs"
     const val MIME_TYPE = "application/octet-stream"
 
-    private const val ITERATIONS = 210_000
     private val json = Json { encodeDefaults = true; ignoreUnknownKeys = true }
-    private val random = SecureRandom()
 
     data class ImportResult(
         val profiles: List<TunnelProfile>,
@@ -35,41 +27,27 @@ object LibsConfigCodec {
             get() = profiles.singleOrNull()
     }
 
-    fun export(profile: TunnelProfile, passphrase: String = ""): String {
+    fun export(profile: TunnelProfile): String {
         val payload = json.encodeToString(TunnelProfile.serializer(), profile)
-        if (passphrase.isBlank()) {
-            return json.encodeToString(
-                LibsEnvelope.serializer(),
-                LibsEnvelope(profile = payload)
-            )
-        }
-
-        val salt = ByteArray(16).also(random::nextBytes)
-        val iv = ByteArray(12).also(random::nextBytes)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, deriveKey(passphrase, salt), GCMParameterSpec(128, iv))
-        val encrypted = cipher.doFinal(payload.toByteArray(StandardCharsets.UTF_8))
         return json.encodeToString(
             LibsEnvelope.serializer(),
             LibsEnvelope(
-                encrypted = true,
-                cipherText = encode64(encrypted),
-                salt = encode64(salt),
-                iv = encode64(iv)
+                version = 1,
+                profile = payload
             )
         )
     }
 
     /** Import a single profile. Throws on failure. */
-    fun import(raw: String, passphrase: String = ""): TunnelProfile {
-        val result = importMany(raw, passphrase)
+    fun import(raw: String): TunnelProfile {
+        val result = importMany(raw)
         result.single?.let { return it }
         if (result.profiles.isNotEmpty()) return result.profiles.first()
         error(result.failures.firstOrNull() ?: "No profile found in the input")
     }
 
     /** Import one or more profiles; never throws. */
-    fun importMany(raw: String, passphrase: String = "", depth: Int = 0): ImportResult {
+    fun importMany(raw: String, depth: Int = 0): ImportResult {
         val text = raw.removePrefix("﻿").trim()
         val profiles = mutableListOf<TunnelProfile>()
         val failures = mutableListOf<String>()
@@ -81,7 +59,7 @@ object LibsConfigCodec {
 
         // .libs envelope or raw JSON.
         if (text.startsWith("{")) {
-            runCatching { importLibs(text, passphrase) }
+            runCatching { importLibs(text) }
                 .onSuccess { profiles += it }
                 .onFailure { failures += (it.message ?: "Invalid .libs file") }
             return ImportResult(profiles, failures)
@@ -115,7 +93,7 @@ object LibsConfigCodec {
             runCatching {
                 val decoded = String(decode64Flexible(text), StandardCharsets.UTF_8)
                 if (SHARE_SCHEMES.any { decoded.contains(it, true) }) {
-                    importMany(decoded, passphrase, depth + 1)
+                    importMany(decoded, depth + 1)
                 } else {
                     null
                 }
@@ -126,23 +104,19 @@ object LibsConfigCodec {
         return ImportResult(profiles, failures)
     }
 
-    private fun importLibs(text: String, passphrase: String): TunnelProfile {
+    private fun importLibs(text: String): List<TunnelProfile> {
         val envelope = json.decodeFromString(LibsEnvelope.serializer(), text)
-        require(envelope.format == "libs-tunnel" && envelope.version == 1) { "Unsupported .libs format" }
-        val payload = if (!envelope.encrypted) {
-            requireNotNull(envelope.profile) { "Profile payload is missing" }
+        require(envelope.format == "libs-tunnel" && envelope.version in 1..2) { "Unsupported .libs format" }
+        require(!envelope.encrypted) { "Encrypted configs are not supported" }
+        val payload = requireNotNull(envelope.profile) { "Profile payload is missing" }
+        val imported = if (envelope.version == 1) {
+            listOf(json.decodeFromString(TunnelProfile.serializer(), payload))
         } else {
-            require(passphrase.isNotBlank()) { "This profile needs a passphrase" }
-            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-            cipher.init(
-                Cipher.DECRYPT_MODE,
-                deriveKey(passphrase, decode64Flexible(requireNotNull(envelope.salt))),
-                GCMParameterSpec(128, decode64Flexible(requireNotNull(envelope.iv)))
-            )
-            String(cipher.doFinal(decode64Flexible(requireNotNull(envelope.cipherText))), StandardCharsets.UTF_8)
+            json.decodeFromString(LibsBundle.serializer(), payload).profiles
         }
-        return json.decodeFromString(TunnelProfile.serializer(), payload)
-            .copy(id = java.util.UUID.randomUUID().toString(), updatedAt = System.currentTimeMillis())
+        return imported.map {
+            it.copy(id = java.util.UUID.randomUUID().toString(), updatedAt = System.currentTimeMillis())
+        }
     }
 
     private fun parseShareLink(link: String): TunnelProfile = when {
@@ -239,15 +213,6 @@ object LibsConfigCodec {
         .filter { it.isNotBlank() }
         .associate { part -> decode(part.substringBefore('=')) to decode(part.substringAfter('=', "")) }
 
-    private fun deriveKey(passphrase: String, salt: ByteArray): SecretKeySpec {
-        val spec = PBEKeySpec(passphrase.toCharArray(), salt, ITERATIONS, 256)
-        val bytes = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded
-        spec.clearPassword()
-        return SecretKeySpec(bytes, "AES")
-    }
-
-    private fun encode64(value: ByteArray): String = Base64.encodeToString(value, Base64.NO_WRAP)
-
     internal fun decode64Flexible(value: String): ByteArray {
         val cleaned = value
             .filterNot { it.isWhitespace() }
@@ -281,9 +246,10 @@ private data class LibsEnvelope(
     val format: String = "libs-tunnel",
     val version: Int = 1,
     val encrypted: Boolean = false,
-    val profile: String? = null,
-    val cipher: String = "AES-256-GCM/PBKDF2-SHA256",
-    val cipherText: String? = null,
-    val salt: String? = null,
-    val iv: String? = null
+    val profile: String? = null
+)
+
+@Serializable
+private data class LibsBundle(
+    val profiles: List<TunnelProfile>
 )

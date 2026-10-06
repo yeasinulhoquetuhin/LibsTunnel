@@ -1,33 +1,10 @@
 .gradle/
-.kotlin/
 .idea/
 build/
 **/build/
-.cxx/
-.externalNativeBuild/
-captures/
-
-# engine binary output
 engine/vpncore
-engine/vpncore-linux-arm64
-
-# generated from the Go engine by scripts/build-engine.sh
 android/app/libs/*.aar
-
-# local machine paths and signing material
 local.properties
 *.jks
 *.keystore
-
-# exported profiles and private configs must never be committed
 *.dark
-*.libs
-
-# build artifacts
-*.apk
-*.aab
-*.ap_
-*.dex
-
-.DS_Store
-Thumbs.db

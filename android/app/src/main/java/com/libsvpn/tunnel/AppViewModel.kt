@@ -3,6 +3,7 @@ package com.libsvpn.tunnel
 import android.app.Application
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.libsvpn.tunnel.data.LibsConfigCodec
@@ -13,6 +14,7 @@ import com.libsvpn.tunnel.model.ProfileStore
 import com.libsvpn.tunnel.model.TunnelProfile
 import com.libsvpn.tunnel.service.VpnCommands
 import com.libsvpn.tunnel.service.VpnStateBus
+import com.libsvpn.tunnel.service.VpnStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -54,14 +56,29 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    fun toggleLock(profile: TunnelProfile) {
+        val lock = !profile.locked
+        viewModelScope.launch {
+            repository.upsert(profile.copy(locked = lock), select = false)
+            toast(if (lock) "Config locked" else "Config unlocked")
+        }
+    }
+
     fun delete(profile: TunnelProfile) {
         if (profile.locked) {
-            message("Locked profiles cannot be deleted")
+            toast("Locked profiles cannot be deleted")
+            return
+        }
+        val runtimeState = VpnStateBus.state.value
+        if (runtimeState.status in setOf(VpnStatus.CONNECTED, VpnStatus.CONNECTING, VpnStatus.STOPPING) &&
+            runtimeState.profileName == profile.name
+        ) {
+            toast("Stop this profile before deleting it")
             return
         }
         viewModelScope.launch {
             repository.delete(profile.id)
-            message("Profile deleted")
+            toast("Config deleted")
         }
     }
 
@@ -73,9 +90,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { repository.updateSettings(settings) }
     }
 
-    fun importText(raw: String, passphrase: String = "") {
+    fun importText(raw: String) {
         viewModelScope.launch(Dispatchers.Default) {
-            val result = LibsConfigCodec.importMany(raw, passphrase)
+            val result = LibsConfigCodec.importMany(raw)
             result.profiles.forEach { repository.upsert(it) }
             when {
                 result.profiles.size > 1 ->
@@ -88,12 +105,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun exportSelected(passphrase: String = ""): String? {
+    fun exportSelected(): String? {
         val profile = store.value.selected ?: run {
             message("Select a profile first")
             return null
         }
-        return runCatching { LibsConfigCodec.export(profile, passphrase) }
+        return runCatching { LibsConfigCodec.export(profile) }
             .onFailure { message(it.message ?: "Export failed") }
             .getOrNull()
     }
@@ -109,14 +126,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 getApplication(),
                 config,
                 profile,
-                store.value.settings.keepScreenOn
+                store.value.settings
             )
         }.onFailure { message(it.message ?: "Unable to start tunnel") }
     }
 
     fun stop() = VpnCommands.stop(getApplication())
 
-    fun clearLogs() = VpnStateBus.clearLogs()
+    fun clearLogs() {
+        VpnStateBus.clearLogs()
+        toast("Logs cleared")
+    }
+
+    private fun toast(text: String) {
+        Toast.makeText(getApplication(), text, Toast.LENGTH_SHORT).show()
+    }
 
     suspend fun installedApps(): List<InstalledApp> = withContext(Dispatchers.IO) {
         val packageManager = getApplication<Application>().packageManager

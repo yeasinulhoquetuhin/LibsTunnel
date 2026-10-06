@@ -17,7 +17,6 @@ object EngineConfigBuilder {
     fun build(profile: TunnelProfile): String {
         val errors = profile.validationErrors()
         require(errors.isEmpty()) { errors.joinToString("\n") }
-
         return buildJsonObject {
             put("backend", "xray")
             put("xray", buildXray(profile))
@@ -182,13 +181,9 @@ object EngineConfigBuilder {
     private fun buildInjection(profile: TunnelProfile): JsonObject = buildJsonObject {
         put("enabled", profile.payloadEnabled)
         put("mode", profile.payloadMode.engineValue)
-        if (profile.payloadMode in setOf(PayloadMode.PROXY, PayloadMode.PROXY_SNI)) {
+        if (profile.payloadMode == PayloadMode.PROXY) {
             put("proxyHost", profile.proxyHost)
             put("proxyPort", profile.proxyPort)
-        }
-        if (profile.payloadMode in setOf(PayloadMode.DIRECT_SNI, PayloadMode.PROXY_SNI)) {
-            put("serverNameIndication", profile.serverName.ifBlank { profile.server })
-            put("allowInsecure", profile.allowInsecure)
         }
         put("payload", profile.payload)
         put("responseMode", profile.responseMode)

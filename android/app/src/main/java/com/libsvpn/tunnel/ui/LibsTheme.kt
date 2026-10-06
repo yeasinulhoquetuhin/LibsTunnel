@@ -49,6 +49,10 @@ private fun palette(accent: AccentColor) = when (accent) {
         Color(0xFF006A6A), Color.White, Color(0xFF9CF1F1), Color(0xFF002020),
         Color(0xFF80D5D5), Color(0xFF003737), Color(0xFF004F4F), Color(0xFF9CF1F1)
     )
+    AccentColor.PINK -> AccentPalette(
+        Color(0xFF9C3D70), Color.White, Color(0xFFFFD8E9), Color(0xFF3E0024),
+        Color(0xFFFFACD3), Color(0xFF5C123A), Color(0xFF7B2953), Color(0xFFFFD8E9)
+    )
 }
 
 @Composable

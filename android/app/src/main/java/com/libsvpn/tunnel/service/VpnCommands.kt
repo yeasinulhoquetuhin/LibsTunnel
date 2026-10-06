@@ -5,11 +5,13 @@ import android.content.Intent
 import android.net.VpnService
 import androidx.core.content.ContextCompat
 import com.libsvpn.tunnel.model.AppRoutingMode
+import com.libsvpn.tunnel.model.AppSettings
 import com.libsvpn.tunnel.model.TunnelProfile
 
 object VpnCommands {
     const val ACTION_START = "com.libsvpn.tunnel.action.START"
     const val ACTION_STOP = "com.libsvpn.tunnel.action.STOP"
+    const val ACTION_RECONNECT = "com.libsvpn.tunnel.action.RECONNECT"
     const val EXTRA_CONFIG_JSON = "config_json"
     const val EXTRA_MTU = "mtu"
     const val EXTRA_PROFILE_NAME = "profile_name"
@@ -21,7 +23,7 @@ object VpnCommands {
 
     fun permissionIntent(context: Context): Intent? = VpnService.prepare(context)
 
-    fun start(context: Context, configJson: String, profile: TunnelProfile, keepScreenOn: Boolean = false) {
+    fun start(context: Context, configJson: String, profile: TunnelProfile, settings: AppSettings) {
         val intent = Intent(context, HeadlessVpnService::class.java)
             .setAction(ACTION_START)
             .putExtra(EXTRA_CONFIG_JSON, configJson)
@@ -31,7 +33,7 @@ object VpnCommands {
             .putExtra(EXTRA_DNS_SECONDARY, if (profile.customDnsEnabled) profile.dnsSecondary else "8.8.8.8")
             .putExtra(EXTRA_ROUTING_MODE, profile.appRoutingMode.name)
             .putStringArrayListExtra(EXTRA_APPLICATIONS, ArrayList(profile.applications))
-            .putExtra(EXTRA_KEEP_SCREEN_ON, keepScreenOn)
+            .putExtra(EXTRA_KEEP_SCREEN_ON, settings.keepScreenOn)
         ContextCompat.startForegroundService(context, intent)
     }
 

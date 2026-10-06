@@ -33,6 +33,17 @@ class HeadlessVpnService : VpnService() {
     private var statsJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var activeProfileName = "Libs Tunnel"
+    private var lastStartArgs: StartArgs? = null
+
+    private data class StartArgs(
+        val config: String?,
+        val mtu: Int,
+        val dnsPrimary: String,
+        val dnsSecondary: String,
+        val routingMode: String,
+        val applications: List<String>,
+        val keepAwake: Boolean
+    )
 
     override fun onCreate() {
         super.onCreate()
@@ -43,6 +54,21 @@ class HeadlessVpnService : VpnService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             VpnCommands.ACTION_STOP -> worker.execute { stopVpn() }
+            VpnCommands.ACTION_RECONNECT -> {
+                val args = lastStartArgs
+                if (args == null) {
+                    VpnStateBus.log("Reconnect unavailable: no saved connection")
+                } else {
+                    VpnStateBus.connecting(activeProfileName)
+                    startForeground(NOTIFICATION_ID, notification(getString(R.string.vpn_connecting)))
+                    worker.execute {
+                        startVpn(
+                            args.config, args.mtu, args.dnsPrimary, args.dnsSecondary,
+                            args.routingMode, args.applications, args.keepAwake
+                        )
+                    }
+                }
+            }
             VpnCommands.ACTION_START -> {
                 activeProfileName = intent.getStringExtra(VpnCommands.EXTRA_PROFILE_NAME).orEmpty()
                     .ifBlank { getString(R.string.app_name) }
@@ -55,6 +81,7 @@ class HeadlessVpnService : VpnService() {
                 val routingMode = intent.getStringExtra(VpnCommands.EXTRA_ROUTING_MODE).orEmpty()
                 val applications = intent.getStringArrayListExtra(VpnCommands.EXTRA_APPLICATIONS).orEmpty()
                 val keepAwake = intent.getBooleanExtra(VpnCommands.EXTRA_KEEP_SCREEN_ON, false)
+                lastStartArgs = StartArgs(config, mtu, dnsPrimary, dnsSecondary, routingMode, applications, keepAwake)
                 worker.execute {
                     startVpn(config, mtu, dnsPrimary, dnsSecondary, routingMode, applications, keepAwake)
                 }
@@ -187,6 +214,16 @@ class HeadlessVpnService : VpnService() {
         )
         .setOngoing(true)
         .setOnlyAlertOnce(true)
+        .addAction(
+            0,
+            "Reconnect",
+            PendingIntent.getService(
+                this,
+                2,
+                Intent(this, HeadlessVpnService::class.java).setAction(VpnCommands.ACTION_RECONNECT),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+        )
         .addAction(
             0,
             "Stop",
