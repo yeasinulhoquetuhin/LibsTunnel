@@ -21,7 +21,7 @@ server address is then rewritten to the injector's localhost address.
 For every Xray transport connection, the injector:
 
 1. Opens and protects a remote socket.
-2. Optionally establishes an outer TLS connection for SNI injection modes.
+2. Optionally establishes an outer payload/TLS layer before the Xray transport.
 3. Expands and writes the configured payload.
 4. Optionally validates HTTP-like response headers.
 5. Bridges the resulting byte stream to Xray.

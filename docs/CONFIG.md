@@ -6,12 +6,7 @@ See `engine/examples/` for complete examples.
 ## Injection modes
 
 - `direct`: TCP to the Xray target, then payload.
-- `direct-sni`: outer TLS to the target, then payload.
 - `proxy`: TCP to `proxyHost:proxyPort`, then payload for the target.
-- `proxy-sni`: outer TLS to the proxy, then payload for the target.
-
-If Xray itself also has TLS enabled, an SNI injection mode creates nested TLS.
-Use that only when the outer endpoint is designed for it.
 
 ## Placeholders
 
@@ -26,8 +21,7 @@ Use that only when the outer endpoint is designed for it.
 - `[split]`
 - `[split=N]`, where `N` is a delay from 0 to 60000 milliseconds
 
-Unlike Dark Tunnel, `[ua]` is explicitly supported here and is replaced by the
-configured `userAgent`.
+`[ua]` is explicitly supported and is replaced by the configured `userAgent`.
 
 ## Response handling
 

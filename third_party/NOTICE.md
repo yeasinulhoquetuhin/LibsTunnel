@@ -29,6 +29,3 @@ MPL-covered Xray source and modifications remain available under MPL-2.0.
 Other transitive Go and Android dependencies are recorded by `go.mod`/`go.sum`
 and Gradle dependency reports. Preserve their copyright notices and license
 terms in distributions.
-
-No Dark Tunnel binary, source, icon, trademark, configuration, or private key
-is included in this project.
