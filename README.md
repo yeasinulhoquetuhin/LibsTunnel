@@ -49,7 +49,8 @@ The banner is project artwork, and its phone illustration is a mockup.
 | Architecture | `arm64-v8a` |
 | Minimum Android | Android 7.0, API 24 |
 | Target / compile SDK | API 36 |
-| Download size | 53,155,062 bytes, approximately 50.7 MiB |
+| Download size | 12,983,922 bytes, approximately 12.4 MiB |
+| Build variant | Release, with R8 and resource shrinking |
 | Signing | Android debug certificate |
 
 Release notes and the source archive are on the
@@ -58,7 +59,7 @@ Release notes and the source archive are on the
 ### Verify the APK
 
 ```text
-1bdf727ceaa9b8607089c10a241a6662727b36c1435ed3761339a199e94e9e12  Libs-Tunnel-v1.0.1-arm64.apk
+2253f7b342f7dfb870d002e8f99683d93c5628c27ca2f574217893cf429ff010  Libs-Tunnel-v1.0.1-arm64.apk
 ```
 
 ```bash
@@ -69,6 +70,11 @@ adb install Libs-Tunnel-v1.0.1-arm64.apk
 The published v1.0.0 and v1.0.1 APKs use different signing certificates.
 Export any profiles you want to keep before uninstalling v1.0.0, then install
 v1.0.1. Uninstalling removes the app's local data.
+
+The optimized v1.0.1 APK retains the signing certificate of the earlier v1.0.1
+APK, so it can replace that installation without uninstalling it. Its smaller
+size comes from R8/resource shrinking, native debug-symbol removal and APK
+repacking.
 
 ## Get started
 
@@ -276,6 +282,18 @@ The Android script assembles the debug variant and writes
 ignored by Git, so a fresh clone needs the engine build first. The scripts
 assemble a debug-signed APK; signing with your own release key requires separate
 Gradle signing configuration.
+
+For a size-optimized build signed with the current machine's Android debug key:
+
+```bash
+cd android
+./gradlew -PdebugReleaseSigning=true assembleRelease
+```
+
+This enables the release variant's R8 minification and resource shrinking while
+using the debug certificate only when explicitly requested. The engine build
+also omits native debug symbols. Optional APK repacking, stripping, alignment
+and re-signing are documented in [docs/BUILD.md](docs/BUILD.md).
 
 For an AAPT2 override on an ARM64 Linux build host:
 

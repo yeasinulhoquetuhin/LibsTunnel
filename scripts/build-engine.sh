@@ -24,6 +24,7 @@ gomobile init
 gomobile bind \
   -target=android/arm64 \
   -androidapi=24 \
+  -ldflags="-s -w" \
   -javapkg=com.libsvpn.tunnel.bindings \
   -o "$OUTPUT" \
   .

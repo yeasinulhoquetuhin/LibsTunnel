@@ -7,4 +7,6 @@ android/app/libs/*.aar
 local.properties
 *.jks
 *.keystore
+*.apk
+*.idsig
 *.dark
